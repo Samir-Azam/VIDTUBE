@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.env
+package-lock.json
+coverage
+logs
+*.log
+*.test.js
+public
