@@ -195,4 +195,143 @@ const logoutUser = asyncHandler(async(req,res)=>{
       .json(new ApiResponse(200,{}, "User logged out successfully"))
       
 })
-export { registerUser, loginUser, refreshAccessToken, logoutUser };
+
+const changePassword = asyncHandler(async(req, res)=>{
+  // need to grab the oldPassword and then  i can change it and save it
+  const {oldPassword,newPassword} = req.body
+  if (!oldPassword || !newPassword){
+    throw new ApiError(400, "All the fields are mandatory")
+  }
+  try {
+    const user = await User.findById(req?.user._id)
+    const validPassword = await user.isPasswordCorrect(oldPassword)
+    if (!validPassword){
+      throw new ApiError(401, "Entered Password is Incorrect")
+    }
+    user.password = newPassword
+    await user.save({validateBeforeSave:false})
+    return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Password changed successfully"))
+  } catch (error) {
+    throw new ApiError(401, "Something went wrong try again later")
+  }
+})
+
+
+const getCurrentUser = asyncHandler(async(req, res)=>{
+  
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current User details"))
+})
+
+
+const updateAccountDetails = asyncHandler(async(req, res)=>{
+  const {username, email} = req.body
+  if (!username || !email){
+    throw new ApiError(400, "Both username and email is required")
+  }
+  const existedUser = await User.findOne({
+    _id:{$ne:req.user._id},
+    $or:[{email},{username}]
+  })
+  if (existedUser){
+    throw new ApiError(400, "Email or Password is already used")
+  }
+  try {
+    const user = await User.findByIdAndUpdate(req.user._id,
+      {
+        $set:{
+          username,
+          email,
+        }
+      },
+      {new:true,
+        runValidators:true
+      }
+    ).select("-password -refreshToken")
+  
+    return res
+      .status(200)
+      .json(new ApiResponse(200, user, "Updated user details"))
+  } catch (error) {
+    throw new ApiError(400, "Failed updating the details try later")
+  }
+})
+
+const updateAvatar = asyncHandler(async (req, res) => {
+  const avatarLocalPath = req.file?.path
+
+  if (!avatarLocalPath){
+    throw new ApiError(400, "Upload avatar")
+  }
+  let avatar
+  try {
+    avatar = await uploadOnCloudinary(avatarLocalPath)
+    console.log("Avatar uploaded on cloudinary")
+  } catch (error) {
+    throw new ApiError(400, "Avatar Upload Failed")
+  }
+
+  const user = await User.findByIdAndUpdate(req.user._id,
+    {$set:{avatar:avatar.url}},
+    {new:true}
+  ).select("-password -refreshToken")
+
+  if (!user){
+    throw new ApiError(404, "Failed Avatar Updation")
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Avatar Updated successfully"))
+
+});
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+  const coverLocalPath = req.file?.path
+  if (!coverLocalPath){
+    throw new ApiError(400, "Upload Cover Image")
+  }
+  let coverImage;
+
+  try {
+    coverImage = await uploadOnCloudinary(coverLocalPath)
+    console.log("Cover Image is Uploaded on cloudinary")
+  } catch (error) {
+    throw new ApiError(400, "Failed Uploading the Cover Image")
+  }
+
+  if (!coverImage || !coverImage.url){
+    throw new ApiError(400, "Cover Image can't be updated right now")
+  }
+
+  const user  = await User.findByIdAndUpdate(req.user._id,
+    {
+      $set:{
+        coverImage:coverImage.url
+      }
+    },
+    {new:true}
+  ).select("-password -refreshToken")
+
+  if (!user){
+    throw new ApiError(400, "Something went wrong try later")
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null,"Cover Image is Updated"))
+});
+
+export {
+  registerUser,
+  loginUser,
+  refreshAccessToken,
+  logoutUser,
+  changePassword,
+  getCurrentUser,
+  updateAccountDetails,
+  updateAvatar,
+  updateCoverImage,
+};
